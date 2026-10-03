@@ -37,7 +37,7 @@ data "aws_ami" "amazon_linux" {
 }
 ```
 
-### Ubuntu 22.04 LTS
+### Ubuntu 24.04 LTS (Noble)
 
 ```hcl
 data "aws_ami" "ubuntu" {
@@ -46,10 +46,24 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd*/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]  # NOT "amd64" — see Gotchas
   }
 }
 ```
+
+> ⚠️ The `architecture` **filter value is `x86_64`**, even though the AMI
+> *name* contains "amd64". Filtering on `amd64` returns
+> "query returned no results".
 
 ## Instance Types
 
@@ -165,6 +179,10 @@ resource "aws_instance" "web" {
 4. **User Data**: Only runs at first boot (unless `cloud_init_config` is used)
 5. **Termination**: Stop vs Terminate - be careful with `disable_api_termination`
 6. **AMI Updates**: AMI IDs change frequently, always use `data` source with `most_recent = true`
+7. **Architecture filter**: `data.aws_ami` `architecture` filter takes `x86_64` / `arm64`, never `amd64` — mixing name convention (`amd64` in the AMI name) with the filter value silently returns zero results
+8. **Free tier regions**: 750 h/month of t2.micro or t3.micro is a **global** budget across all regions (t3.micro where t2.micro is unavailable, e.g. eu-north-1/Stockholm); two instances 24/7 ≈ 15 days max
+9. **Multi-region**: each provider alias needs its own `data.aws_ami`, `data.aws_vpc`, SG, EIP — regional resources do not span regions
+10. **Default VPC**: exists in most regions; verify with `data "aws_vpc" "default" { default = true }` before assuming
 
 ## See Also
 

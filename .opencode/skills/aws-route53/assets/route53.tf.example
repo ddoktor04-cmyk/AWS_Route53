@@ -1,0 +1,126 @@
+# ============================================================
+# Complete example: Route 53 latency-based routing
+# Two regions, two servers, one domain
+# ============================================================
+
+terraform {
+  required_version = ">= 1.5"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
+variable "aws_access_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "aws_secret_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "domain" {
+  type    = string
+  default = "example.com"
+}
+
+# Default provider — primary region (Europe)
+provider "aws" {
+  region     = "eu-north-1"
+  access_key = var.aws_access_key
+  secret_key = var.aws_secret_key
+}
+
+# Aliased provider — backup region (Canada)
+provider "aws" {
+  alias      = "ca"
+  region     = "ca-central-1"
+  access_key = var.aws_access_key
+  secret_key = var.aws_secret_key
+}
+
+# ---------- Hosted zone ----------
+resource "aws_route53_zone" "main" {
+  name = var.domain
+}
+
+# ---------- Elastic IPs for both servers ----------
+resource "aws_eip" "primary" {
+  provider = aws
+  # instance = aws_instance.primary.id  # attach to server in eu-north-1
+}
+
+resource "aws_eip" "backup" {
+  provider = aws.ca
+  # instance = aws_instance.backup.id   # attach to server in ca-central-1
+}
+
+# ---------- Latency-based routing records ----------
+# set_identifier + latency_routing_policy are BOTH required
+resource "aws_route53_record" "primary" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = var.domain
+  type    = "A"
+  ttl     = 60
+  records = [aws_eip.primary.public_ip]
+
+  set_identifier = "eu-north-1"
+
+  latency_routing_policy {
+    region = "eu-north-1"
+  }
+}
+
+resource "aws_route53_record" "backup" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = var.domain
+  type    = "A"
+  ttl     = 60
+  records = [aws_eip.backup.public_ip]
+
+  set_identifier = "ca-central-1"
+
+  latency_routing_policy {
+    region = "ca-central-1"
+  }
+}
+
+# ---------- Alternative: weighted routing (80% / 20%) ----------
+# resource "aws_route53_record" "primary_weighted" {
+#   zone_id = aws_route53_zone.main.zone_id
+#   name    = var.domain
+#   type    = "A"
+#   ttl     = 60
+#   records = [aws_eip.primary.public_ip]
+#
+#   set_identifier = "primary"
+#
+#   weighted_routing_policy {
+#     weight = 200   # sum = 250 → 200/250 = 80% of queries
+#   }
+# }
+#
+# resource "aws_route53_record" "backup_weighted" {
+#   zone_id = aws_route53_zone.main.zone_id
+#   name    = var.domain
+#   type    = "A"
+#   ttl     = 60
+#   records = [aws_eip.backup.public_ip]
+#
+#   set_identifier = "backup"
+#
+#   weighted_routing_policy {
+#     weight = 50    # 50/250 = 20% of queries
+#   }
+# }
+
+# ---------- Outputs: NS for the registrar ----------
+output "nameservers" {
+  description = "4 name servers to enter at the domain registrar"
+  value       = aws_route53_zone.main.name_servers
+}

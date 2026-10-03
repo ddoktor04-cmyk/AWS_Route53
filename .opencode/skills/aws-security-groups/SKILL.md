@@ -190,6 +190,7 @@ resource "aws_security_group_rule" "db_from_app" {
 4. **Stateful**: Return traffic automatically allowed
 5. **References**: Use SG IDs, not CIDR when possible
 6. **NACLs**: Remember NACLs are stateless (need both inbound and outbound)
+7. **Descriptions must be ASCII**: AWS rejects non-ASCII (e.g. Cyrillic) in SG and rule `description` fields with `doesn't comply with restrictions ("^[0-9A-Za-z_ .:/()#,@\\[\\]+=&;{}!$*-]*$")` — keep them English/ASCII; `Name` tags may be any UTF-8
 
 ## See Also
 
