@@ -1,0 +1,124 @@
+# EC2 Instance Example
+
+## Variables
+
+```hcl
+variable "environment" {
+  type        = string
+  description = "Environment name (dev, staging, prod)"
+}
+
+variable "instance_type" {
+  type        = string
+  description = "EC2 instance type"
+  default     = "t3.micro"
+}
+
+variable "key_name" {
+  type        = string
+  description = "Name of the SSH key pair"
+}
+
+variable "subnet_id" {
+  type        = string
+  description = "Subnet ID for the instance"
+}
+
+variable "security_group_ids" {
+  type        = list(string)
+  description = "List of security group IDs"
+}
+
+variable "ami_id" {
+  type        = string
+  description = "AMI ID (leave empty to use latest Amazon Linux 2023)"
+  default     = ""
+}
+```
+
+## AMI Data Source
+
+```hcl
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+}
+```
+
+## EC2 Instance
+
+```hcl
+resource "aws_instance" "web" {
+  ami           = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
+  subnet_id              = var.subnet_id
+  vpc_security_group_ids = var.security_group_ids
+
+  associate_public_ip_address = false
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from $(hostname)</h1>" > /var/www/html/index.html
+              EOF
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+    encrypted   = true
+
+    tags = {
+      Name = "${var.environment}-root-volume"
+    }
+  }
+
+  tags = {
+    Name        = "${var.environment}-web-server"
+    Environment = var.environment
+  }
+}
+```
+
+## Outputs
+
+```hcl
+output "instance_id" {
+  description = "The ID of the EC2 instance"
+  value       = aws_instance.web.id
+}
+
+output "private_ip" {
+  description = "The private IP address of the EC2 instance"
+  value       = aws_instance.web.private_ip
+}
+
+output "public_ip" {
+  description = "The public IP address of the EC2 instance"
+  value       = aws_instance.web.public_ip
+}
+```

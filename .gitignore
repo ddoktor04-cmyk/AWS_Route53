@@ -1,0 +1,40 @@
+# Terraform
+/.terraform
+/.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+*.tfplan
+tfplan
+
+# Sensitive files
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars
+*.auto.tfvars.backup
+
+# Secrets
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+credentials
+credentials.*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.backup
+*.orig
